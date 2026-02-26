@@ -1,27 +1,17 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import api from "../services/api";
 import useSocket from "../hooks/useSocket";
 import Toast from "../components/Toast";
 
-// ─── Field component defined OUTSIDE the parent component ───
-// CRITICAL: defining this inside JoinOurTeam() causes React to
-// recreate a new component type on every render, which unmounts
-// and remounts the input, losing focus and cursor position.
+// ─── Field component at module level — NEVER inside render ───
 function Field({ label, name, type = "text", placeholder, value, onChange, error }) {
   const inputCls = `w-full px-4 py-2 rounded-xl border focus:ring-2 focus:outline-none transition ${error ? "border-red-400 focus:ring-red-300" : "border-gray-300 focus:ring-blue-500"
     }`;
   return (
     <div>
       <label className="block font-medium text-gray-700 mb-1">{label}</label>
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className={inputCls}
-        autoComplete="off"
-      />
+      <input type={type} name={name} value={value} onChange={onChange}
+        placeholder={placeholder} className={inputCls} autoComplete="off" />
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>
   );
@@ -32,6 +22,31 @@ const INITIAL_FORM = {
   state: "", district: "", block: "", city: "", pincode: "", referred_by: "",
 };
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+/**
+ * Trigger a PDF download in the browser without opening a new tab.
+ * @param {string} url  — absolute URL of the PDF endpoint
+ * @param {string} filename — suggested download filename
+ */
+async function triggerPdfDownload(url, filename) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+  } catch (err) {
+    console.error("PDF download error:", err);
+  }
+}
+
 export default function JoinOurTeam() {
   const [photoName, setPhotoName] = useState("No file chosen");
   const [photoFile, setPhotoFile] = useState(null);
@@ -40,12 +55,12 @@ export default function JoinOurTeam() {
   const [toast, setToast] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formData, setFormData] = useState(INITIAL_FORM);
+  const [memberId, setMemberId] = useState(null);
 
   useSocket("new_applicant", useCallback((data) => {
     setToast({ type: "info", message: `New application from ${data.full_name}` });
   }, []));
 
-  // ─── Single onChange handler — stable reference ─────────────
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -62,33 +77,49 @@ export default function JoinOurTeam() {
     setFieldErrors({});
 
     try {
+      let snapshot;
+      setFormData((current) => { snapshot = current; return current; });
+
       const fd = new FormData();
-      Object.entries(formData).forEach(([k, v]) => fd.append(k, v));
+      Object.entries(snapshot).forEach(([k, v]) => fd.append(k, v));
       fd.append("terms_accepted", "true");
       if (photoFile) fd.append("photo", photoFile);
 
-      const data = await api.upload("/join", fd);
+      const res = await api.upload("/join", fd);
 
-      if (data.success) {
-        setToast({ type: "success", message: "Your registration has been submitted!" });
+      if (res.success) {
+        // Show success toast with member ID
+        setMemberId(res.member_id);
+        setToast({
+          type: "success",
+          message: `✅ Registered! Your Member ID: ${res.member_id}. ID card sent to your email!`,
+        });
+
+        // Auto-download the PDF
+        if (res.pdf_url) {
+          const filename = `SRU-ID-${res.member_id}.pdf`;
+          await triggerPdfDownload(`${API_BASE.replace("/api", "")}${res.pdf_url}`, filename);
+        }
+
+        // Reset form
         setFormData(INITIAL_FORM);
         setPhotoFile(null);
         setPhotoName("No file chosen");
         setAgreed(false);
       } else {
-        if (data.errors) {
+        if (res.errors) {
           const errs = {};
-          data.errors.forEach((err) => { errs[err.field] = err.message; });
+          res.errors.forEach((err) => { errs[err.field] = err.message; });
           setFieldErrors(errs);
         }
-        setToast({ type: "error", message: data.message || "Something went wrong." });
+        setToast({ type: "error", message: res.message || "Something went wrong." });
       }
     } catch {
       setToast({ type: "error", message: "Server unreachable. Please try again later." });
     } finally {
       setLoading(false);
     }
-  }, [agreed, formData, photoFile]);
+  }, [agreed, photoFile]);
 
   return (
     <section className="w-full flex justify-center bg-gradient-to-br from-gray-100 to-gray-200 px-4 py-24">
@@ -96,6 +127,15 @@ export default function JoinOurTeam() {
 
       <div className="max-w-2xl w-full bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg p-8 border border-white/40">
         <h2 className="text-3xl font-bold text-gray-900 mb-6 text-center">Registration Form</h2>
+
+        {/* Member ID display after success */}
+        {memberId && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-center">
+            <p className="text-sm text-green-700 font-medium">Your Member ID</p>
+            <p className="text-2xl font-bold text-green-800 mt-1">{memberId}</p>
+            <p className="text-xs text-green-600 mt-1">ID card has been sent to your email and downloaded.</p>
+          </div>
+        )}
 
         <form className="space-y-5" onSubmit={handleSubmit} noValidate>
           <Field label="Full Name *" name="full_name" placeholder="Enter full name"
@@ -124,30 +164,20 @@ export default function JoinOurTeam() {
             <label className="block font-medium text-gray-700 mb-2">Upload Photo</label>
             <label className="flex items-center gap-3 px-4 py-2 bg-gray-100 border border-gray-300 rounded-xl cursor-pointer hover:bg-gray-200 transition">
               <span className="font-medium text-gray-700">Choose File</span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files.length > 0) {
-                    setPhotoName(e.target.files[0].name);
-                    setPhotoFile(e.target.files[0]);
-                  }
-                }}
-              />
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                if (e.target.files.length > 0) {
+                  setPhotoName(e.target.files[0].name);
+                  setPhotoFile(e.target.files[0]);
+                }
+              }} />
               <span className="text-gray-600 text-sm truncate max-w-[160px]">{photoName}</span>
             </label>
           </div>
 
           {/* TERMS */}
           <div className="flex items-start gap-3 mt-4">
-            <input
-              type="checkbox"
-              id="agree"
-              className="mt-1"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-            />
+            <input type="checkbox" id="agree" className="mt-1" checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)} />
             <label htmlFor="agree" className="text-gray-700 text-sm cursor-pointer">
               I agree to the <strong>Terms &amp; Conditions</strong> and <strong>Rules &amp; Regulations</strong>.
             </label>
@@ -156,15 +186,10 @@ export default function JoinOurTeam() {
             <p className="text-red-500 text-xs">{fieldErrors.terms_accepted}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={!agreed || loading}
-            className={`w-full py-3 rounded-xl text-lg font-semibold transition ${agreed && !loading
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
-          >
-            {loading ? "Submitting…" : "Submit Registration"}
+          <button type="submit" disabled={!agreed || loading}
+            className={`w-full py-3 rounded-xl text-lg font-semibold transition ${agreed && !loading ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}>
+            {loading ? "Submitting & Generating ID Card…" : "Submit Registration"}
           </button>
         </form>
       </div>

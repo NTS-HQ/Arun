@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import useSocket from "../hooks/useSocket";
 import Toast from "../components/Toast";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
-
+// ── Constants (outside component — never re-created) ────────
 const TABS = [
     { key: "contacts", label: "Contacts" },
     { key: "help_requests", label: "Help Requests" },
@@ -23,7 +22,6 @@ const STATUS_COLORS = {
     closed: "bg-gray-200 text-gray-700",
 };
 
-// ─── Column definitions per tab ────────────────────────────
 const COLUMNS = {
     contacts: [
         { key: "name", label: "Name" },
@@ -68,13 +66,20 @@ const COLUMNS = {
     ],
 };
 
-// ─── Image Preview Modal ────────────────────────────────────
+const FILE_BASE = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+
+// ── Sub-components (outside AdminDashboard — no re-creation) ─
+
 function ImageModal({ src, onClose }) {
     if (!src) return null;
     return (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+        <div
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={onClose}
+        >
             <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
-                <img src={src} alt="Preview" className="w-full rounded-2xl shadow-2xl object-contain max-h-[80vh]" />
+                <img src={src} alt="Preview"
+                    className="w-full rounded-2xl shadow-2xl object-contain max-h-[80vh]" />
                 <button onClick={onClose}
                     className="absolute -top-3 -right-3 bg-white text-gray-800 rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold hover:bg-red-500 hover:text-white transition">
                     ×
@@ -84,32 +89,31 @@ function ImageModal({ src, onClose }) {
     );
 }
 
-// ─── Cell Renderer ──────────────────────────────────────────
 function Cell({ col, value, onImageClick }) {
-    const fileBase = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
-
     if (col.isImage && value) {
         return (
             <td className="px-3 py-2">
-                <img src={`${fileBase}${value}`} alt="photo"
+                <img
+                    src={`${FILE_BASE}${value}`} alt="photo"
                     className="w-10 h-10 rounded-lg object-cover cursor-pointer hover:opacity-80 transition border border-gray-200"
-                    onClick={() => onImageClick(`${fileBase}${value}`)} />
+                    onClick={() => onImageClick(`${FILE_BASE}${value}`)}
+                />
             </td>
         );
     }
     if (col.isFile && value) {
-        const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(value);
+        const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(value);
         return (
             <td className="px-3 py-2">
                 <div className="flex items-center gap-2">
-                    {isImage && (
-                        <img src={`${fileBase}${value}`} alt="attach"
+                    {isImg && (
+                        <img src={`${FILE_BASE}${value}`} alt="attach"
                             className="w-8 h-8 rounded object-cover cursor-pointer hover:opacity-80"
-                            onClick={() => onImageClick(`${fileBase}${value}`)} />
+                            onClick={() => onImageClick(`${FILE_BASE}${value}`)} />
                     )}
-                    <a href={`${fileBase}${value}`} target="_blank" rel="noreferrer"
+                    <a href={`${FILE_BASE}${value}`} target="_blank" rel="noreferrer"
                         className="text-xs text-blue-600 hover:underline font-medium">
-                        {isImage ? "View" : "Download"}
+                        {isImg ? "View" : "Download"}
                     </a>
                 </div>
             </td>
@@ -118,7 +122,8 @@ function Cell({ col, value, onImageClick }) {
     if (col.isBool) {
         return (
             <td className="px-3 py-2">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${value ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${value ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                    }`}>
                     {value ? "✓ Yes" : "✗ No"}
                 </span>
             </td>
@@ -134,7 +139,7 @@ function Cell({ col, value, onImageClick }) {
     );
 }
 
-// ─── Main Dashboard ─────────────────────────────────────────
+// ── Main Dashboard ──────────────────────────────────────────
 export default function AdminDashboard() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState("contacts");
@@ -146,9 +151,16 @@ export default function AdminDashboard() {
     const [previewImg, setPreviewImg] = useState(null);
 
     const token = localStorage.getItem("adminToken");
-    useEffect(() => { if (!token) navigate("/admin"); }, [token, navigate]);
 
-    // ─── Fetch data ─────────────────────────────────────────
+    // ── Auth guard ──────────────────────────────────────────
+    useEffect(() => {
+        if (!token) navigate("/admin");
+    }, [token, navigate]);
+
+    // ── Fetch dashboard data ────────────────────────────────
+    // Wrapped in useCallback so it's a stable reference, and
+    // also stored in a ref so socket handlers always call the
+    // the latest version without stale closure issues.
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
@@ -161,42 +173,85 @@ export default function AdminDashboard() {
         }
     }, [token]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    // Keep a ref to the latest fetchData so socket callbacks
+    // don't capture a stale version.
+    const fetchDataRef = useRef(fetchData);
+    useEffect(() => {
+        fetchDataRef.current = fetchData;
+    }, [fetchData]);
 
-    // ─── Realtime ───────────────────────────────────────────
-    useSocket("new_contact", (e) => { setToast({ type: "info", message: `New contact from ${e.name}` }); fetchData(); });
-    useSocket("new_help_request", (e) => { setToast({ type: "info", message: `Help request from ${e.full_name}` }); fetchData(); });
-    useSocket("new_applicant", (e) => { setToast({ type: "info", message: `Application from ${e.full_name}` }); fetchData(); });
-    useSocket("new_donation", (e) => { setToast({ type: "info", message: `Donation ₹${e.amount} received` }); fetchData(); });
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
-    // ─── Actions ─────────────────────────────────────────────
-    const handleDelete = async (type, id) => {
+    // ── Socket listeners — use ref-based fetch to avoid stale closures ──
+    useSocket("new_contact", useCallback((e) => {
+        setToast({ type: "info", message: `New contact from ${e.name}` });
+        fetchDataRef.current();
+    }, []));
+
+    useSocket("new_help_request", useCallback((e) => {
+        setToast({ type: "info", message: `Help request from ${e.full_name}` });
+        fetchDataRef.current();
+    }, []));
+
+    useSocket("new_applicant", useCallback((e) => {
+        setToast({ type: "info", message: `Application from ${e.full_name}` });
+        fetchDataRef.current();
+    }, []));
+
+    useSocket("new_donation", useCallback((e) => {
+        setToast({ type: "info", message: `Donation ₹${e.amount} received` });
+        fetchDataRef.current();
+    }, []));
+
+    // ── Actions ─────────────────────────────────────────────
+    const handleDelete = useCallback(async (type, id) => {
         if (!confirm("Delete this entry permanently?")) return;
         try {
             await api.del(`/admin/${type}/${id}`, token);
-            setToast({ type: "success", message: `Deleted ${type} #${id}` });
-            fetchData();
-        } catch { setToast({ type: "error", message: "Delete failed." }); }
-    };
+            setToast({ type: "success", message: `Deleted #${id}` });
+            fetchDataRef.current();
+        } catch {
+            setToast({ type: "error", message: "Delete failed." });
+        }
+    }, [token]);
 
-    const handleStatus = async (type, id, newStatus) => {
+    const handleStatus = useCallback(async (type, id, newStatus) => {
         try {
             await api.patch(`/admin/${type}/${id}/status`, { status: newStatus }, token);
-            fetchData();
-        } catch { setToast({ type: "error", message: "Status update failed." }); }
-    };
+            // Optimistic local update — no full refetch needed
+            setData((prev) => ({
+                ...prev,
+                [type]: (prev[type] || []).map((row) =>
+                    row.id === id ? { ...row, status: newStatus } : row
+                ),
+            }));
+        } catch {
+            setToast({ type: "error", message: "Status update failed." });
+        }
+    }, [token]);
 
-    const logout = () => { localStorage.removeItem("adminToken"); navigate("/admin"); };
+    const logout = useCallback(() => {
+        localStorage.removeItem("adminToken");
+        navigate("/admin");
+    }, [navigate]);
 
-    // ─── Filter rows ──────────────────────────────────────────
+    const handleTabChange = useCallback((key) => {
+        setActiveTab(key);
+        setSearch("");
+        setStatusFilter("all");
+    }, []);
+
+    // ── Filter rows ──────────────────────────────────────────
     const allRows = data[activeTab] || [];
     const filtered = allRows.filter((row) => {
-        const matchesStatus = statusFilter === "all" || row.status === statusFilter;
+        const matchStatus = statusFilter === "all" || row.status === statusFilter;
         const name = (row.name || row.full_name || "").toLowerCase();
         const email = (row.email || "").toLowerCase();
-        const q = search.toLowerCase();
-        const matchesSearch = !q || name.includes(q) || email.includes(q);
-        return matchesStatus && matchesSearch;
+        const q = search.toLowerCase().trim();
+        const matchSearch = !q || name.includes(q) || email.includes(q);
+        return matchStatus && matchSearch;
     });
 
     const cols = COLUMNS[activeTab] || [];
@@ -207,7 +262,8 @@ export default function AdminDashboard() {
             <ImageModal src={previewImg} onClose={() => setPreviewImg(null)} />
 
             <div className="max-w-full mx-auto">
-                {/* ── Header ─────────────────────────────── */}
+
+                {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
                     <button onClick={logout}
@@ -216,32 +272,42 @@ export default function AdminDashboard() {
                     </button>
                 </div>
 
-                {/* ── Tabs ───────────────────────────────── */}
+                {/* Tabs */}
                 <div className="flex gap-2 mb-4 flex-wrap">
                     {TABS.map((tab) => (
-                        <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearch(""); setStatusFilter("all"); }}
-                            className={`px-5 py-2 rounded-full text-sm font-medium transition ${activeTab === tab.key ? "bg-black text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                        <button key={tab.key} onClick={() => handleTabChange(tab.key)}
+                            className={`px-5 py-2 rounded-full text-sm font-medium transition ${activeTab === tab.key
+                                    ? "bg-black text-white"
+                                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
                                 }`}>
                             {tab.label}
-                            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? "bg-white/20" : "bg-gray-200"}`}>
+                            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? "bg-white/20" : "bg-gray-200"
+                                }`}>
                                 {(data[tab.key] || []).length}
                             </span>
                         </button>
                     ))}
                 </div>
 
-                {/* ── Search + Filter Bar ─────────────────── */}
+                {/* Search + Filter */}
                 <div className="flex flex-col sm:flex-row gap-3 mb-4">
                     <input
-                        type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by name or email…"
                         className="flex-1 px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-black focus:outline-none text-sm"
                     />
-                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-black focus:outline-none text-sm bg-white">
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="px-4 py-2 rounded-xl border border-gray-300 focus:outline-none text-sm bg-white"
+                    >
                         <option value="all">All Statuses</option>
                         {STATUSES.map((s) => (
-                            <option key={s} value={s}>{s.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}</option>
+                            <option key={s} value={s}>
+                                {s.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                            </option>
                         ))}
                     </select>
                     <button onClick={fetchData}
@@ -250,26 +316,28 @@ export default function AdminDashboard() {
                     </button>
                 </div>
 
-                {/* ── Stats Row ─────────────────────────── */}
-                <div className="flex gap-4 mb-4 flex-wrap text-sm">
+                {/* Stats */}
+                <div className="flex gap-3 mb-4 text-sm flex-wrap">
                     <span className="bg-blue-50 text-blue-800 px-3 py-1 rounded-full font-medium">
                         Total: {allRows.length}
                     </span>
                     <span className="bg-gray-50 text-gray-700 px-3 py-1 rounded-full font-medium">
                         Showing: {filtered.length}
                     </span>
-                    {statusFilter !== "all" && (
-                        <button onClick={() => setStatusFilter("all")}
-                            className="text-xs text-gray-500 hover:text-red-500 underline">
-                            Clear filter
+                    {(search || statusFilter !== "all") && (
+                        <button
+                            onClick={() => { setSearch(""); setStatusFilter("all"); }}
+                            className="text-xs text-gray-500 hover:text-red-500 underline"
+                        >
+                            Clear filters
                         </button>
                     )}
                 </div>
 
-                {/* ── Table ─────────────────────────────── */}
+                {/* Table */}
                 {loading ? (
                     <div className="flex items-center justify-center py-20">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black" />
                     </div>
                 ) : filtered.length === 0 ? (
                     <div className="bg-white rounded-2xl p-12 text-center text-gray-400 shadow border border-gray-200">
@@ -278,7 +346,7 @@ export default function AdminDashboard() {
                 ) : (
                     <div className="overflow-x-auto bg-white rounded-2xl shadow border border-gray-200">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0">
+                            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                                 <tr>
                                     <th className="px-3 py-3 font-semibold">ID</th>
                                     {cols.map((c) => (
@@ -300,43 +368,50 @@ export default function AdminDashboard() {
 
                                         {/* Status badge */}
                                         <td className="px-3 py-2">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[row.status] || "bg-gray-100 text-gray-600"}`}>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[row.status] || "bg-gray-100 text-gray-600"
+                                                }`}>
                                                 {row.status}
                                             </span>
                                         </td>
 
                                         {/* Date */}
                                         <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
-                                            {new Date(row.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                            {new Date(row.created_at).toLocaleDateString("en-IN", {
+                                                day: "2-digit", month: "short", year: "numeric",
+                                            })}
                                         </td>
 
                                         {/* Actions */}
                                         <td className="px-3 py-2">
                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                {/* Approve */}
-                                                <button onClick={() => handleStatus(activeTab, row.id, "resolved")}
-                                                    title="Approve / Resolve"
-                                                    className="px-2.5 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 text-xs font-semibold transition">
+                                                <button
+                                                    onClick={() => handleStatus(activeTab, row.id, "resolved")}
+                                                    title="Approve"
+                                                    className="px-2.5 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 text-xs font-semibold transition"
+                                                >
                                                     ✓ Approve
                                                 </button>
-                                                {/* Reject */}
-                                                <button onClick={() => handleStatus(activeTab, row.id, "closed")}
-                                                    title="Reject / Close"
-                                                    className="px-2.5 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold transition">
+                                                <button
+                                                    onClick={() => handleStatus(activeTab, row.id, "closed")}
+                                                    title="Reject"
+                                                    className="px-2.5 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold transition"
+                                                >
                                                     ✗ Reject
                                                 </button>
-                                                {/* Status dropdown */}
-                                                <select value={row.status}
+                                                <select
+                                                    value={row.status}
                                                     onChange={(e) => handleStatus(activeTab, row.id, e.target.value)}
-                                                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-gray-400">
+                                                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none"
+                                                >
                                                     {STATUSES.map((s) => (
                                                         <option key={s} value={s}>{s.replace("_", " ")}</option>
                                                     ))}
                                                 </select>
-                                                {/* Delete */}
-                                                <button onClick={() => handleDelete(activeTab, row.id)}
+                                                <button
+                                                    onClick={() => handleDelete(activeTab, row.id)}
                                                     title="Delete"
-                                                    className="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600 text-xs font-semibold transition">
+                                                    className="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600 text-xs font-semibold transition"
+                                                >
                                                     🗑
                                                 </button>
                                             </div>

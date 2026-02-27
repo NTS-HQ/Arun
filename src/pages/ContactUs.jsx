@@ -16,7 +16,7 @@ export default function ContactUs() {
   const [toast, setToast] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const { content } = useContent('contact');
+  const { content, refreshContent } = useContent('contact');
   const contactInfo = content.info || {};
 
   useSocket("new_contact", useCallback((data) => {
@@ -47,9 +47,8 @@ export default function ContactUs() {
 
     try {
       const fd = new FormData();
-      setFormData((currentForm) => {
-        Object.entries(currentForm).forEach(([k, v]) => fd.append(k, v));
-        return currentForm;
+      Object.entries(formData).forEach(([k, v]) => {
+        if (v) fd.append(k, v);
       });
       fd.append("terms_accepted", "true");
       if (attachment) fd.append("attachment", attachment);
@@ -70,12 +69,13 @@ export default function ContactUs() {
         }
         setToast({ type: "error", message: res.message || "Something went wrong." });
       }
-    } catch {
+    } catch (err) {
+      console.error("Contact form error:", err);
       setToast({ type: "error", message: "Server unreachable. Please try again later." });
     } finally {
       setLoading(false);
     }
-  }, [agreed, attachment]);
+  }, [agreed, attachment, formData]);
 
   const inputCls = (field) =>
     `w-full px-4 py-3 rounded-full border focus:ring-2 focus:outline-none transition ${fieldErrors[field] ? "border-red-400 focus:ring-red-300" : "border-gray-300 focus:ring-gray-700"
@@ -83,6 +83,14 @@ export default function ContactUs() {
 
   return (
     <section className="w-full bg-gray-50 py-16 px-6 pt-36 lg:pt-8">
+      {/* Refresh Button */}
+      <button 
+        onClick={refreshContent}
+        className="fixed bottom-4 right-4 z-50 bg-black text-white px-4 py-2 rounded-full shadow-lg hover:bg-gray-800 text-sm"
+        title="Click to refresh content"
+      >
+        ↻ Refresh
+      </button>
       <Toast data={toast} onClose={() => setToast(null)} />
       <div className="max-w-7xl mx-auto">
         <h2 className="text-4xl font-semibold text-gray-900 text-center mb-12">Contact Us</h2>

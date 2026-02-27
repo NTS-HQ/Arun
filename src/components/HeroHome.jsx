@@ -2,13 +2,23 @@ import "../styles/index.css"
 import { Link } from "react-router-dom";
 import { FaInstagram, FaFacebookF, FaTwitter, FaYoutube, FaVideo } from "react-icons/fa";
 import { useContent } from "../hooks/useContent";
+import { useState } from "react";
 
 export function HeroHome() {
-    const { content, loading } = useContent('home');
+    const { content, loading, refreshContent } = useContent('home');
     const heroContent = content.hero || {};
 
     return (
         <section className="w-full px-2 md:px-6 lg:px-4 py-4 pt-28 lg:pt-4">
+            {/* Refresh Button */}
+            <button 
+                onClick={refreshContent}
+                className="fixed bottom-4 right-4 z-50 bg-black text-white px-4 py-2 rounded-full shadow-lg hover:bg-gray-800 text-sm"
+                title="Click to refresh content"
+            >
+                ↻ Refresh
+            </button>
+
             <div className="flex flex-col-reverse lg:flex-row items-center justify-between gap-12">
 
                 {/* LEFT SECTION */}

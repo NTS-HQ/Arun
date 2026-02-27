@@ -30,32 +30,46 @@ const COLUMNS = {
         { key: "email", label: "Email" },
         { key: "phone", label: "Phone" },
         { key: "message", label: "Message", truncate: true },
-        { key: "attachment_url", label: "File", isFile: true },
-        { key: "terms_accepted", label: "Terms", isBool: true },
+        { key: "attachmentUrl", label: "File", isFile: true },
+        { key: "termsAccepted", label: "Terms", isBool: true },
     ],
     help_requests: [
-        { key: "full_name", label: "Name" },
+        { key: "fullName", label: "Name" },
+        { key: "dob", label: "DOB" },
+        { key: "gender", label: "Gender" },
         { key: "phone", label: "Phone" },
         { key: "email", label: "Email" },
         { key: "emergency", label: "Emergency" },
-        { key: "help_types", label: "Help Types", truncate: true },
+        { key: "helpTypes", label: "Help Types", truncate: true },
+        { key: "address", label: "Address", truncate: true },
         { key: "state", label: "State" },
         { key: "district", label: "District" },
+        { key: "zipCode", label: "Zip Code" },
+        { key: "attachmentUrl", label: "File", isFile: true },
+        { key: "termsAccepted", label: "Terms", isBool: true },
     ],
     applicants: [
-        { key: "member_id", label: "Member ID" },
-        { key: "full_name", label: "Name" },
+        { key: "memberId", label: "Member ID" },
+        { key: "fullName", label: "Name" },
         { key: "phone", label: "Phone" },
         { key: "email", label: "Email" },
+        { key: "familyMembers", label: "Family Members" },
         { key: "state", label: "State" },
         { key: "district", label: "District" },
+        { key: "block", label: "Block" },
         { key: "city", label: "City" },
+        { key: "pincode", label: "Pincode" },
+        { key: "referredBy", label: "Referred By" },
+        { key: "photoUrl", label: "Photo", isImage: true },
+        { key: "termsAccepted", label: "Terms", isBool: true },
     ],
     donations: [
-        { key: "full_name", label: "Name" },
+        { key: "fullName", label: "Name" },
         { key: "mobile", label: "Mobile" },
         { key: "email", label: "Email" },
         { key: "amount", label: "Amount", isAmount: true },
+        { key: "attachmentUrl", label: "Receipt", isFile: true },
+        { key: "termsAccepted", label: "Terms", isBool: true },
     ],
 };
 
@@ -456,7 +470,7 @@ export default function AdminDashboard() {
     const allRows = data[activeTab] || [];
     const filtered = activeTab !== "content" && activeTab !== "admins" ? allRows.filter((row) => {
         const matchStatus = statusFilter === "all" || row.status === statusFilter;
-        const name = (row.name || row.full_name || "").toLowerCase();
+        const name = (row.name || row.fullName || row.full_name || "").toLowerCase();
         const email = (row.email || "").toLowerCase();
         const q = search.toLowerCase().trim();
         const matchSearch = !q || name.includes(q) || email.includes(q);

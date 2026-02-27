@@ -47,11 +47,10 @@ export default function Donate() {
     setFieldErrors({});
 
     try {
-      let snapshot;
-      setFormData((current) => { snapshot = current; return current; });
-
       const fd = new FormData();
-      Object.entries(snapshot).forEach(([k, v]) => fd.append(k, v));
+      Object.entries(formData).forEach(([k, v]) => {
+        if (v) fd.append(k, v);
+      });
       fd.append("terms_accepted", "true");
       if (attachment) fd.append("attachment", attachment);
 
@@ -71,12 +70,13 @@ export default function Donate() {
         }
         setToast({ type: "error", message: res.message || "Something went wrong." });
       }
-    } catch {
+    } catch (err) {
+      console.error("Donation error:", err);
       setToast({ type: "error", message: "Server unreachable. Please try again later." });
     } finally {
       setLoading(false);
     }
-  }, [agreed, attachment]);
+  }, [agreed, attachment, formData]);
 
   const inp = (field) =>
     `w-full px-4 py-2 rounded-xl border focus:ring-2 focus:outline-none transition ${fieldErrors[field] ? "border-red-400 focus:ring-red-300" : "border-gray-300 focus:ring-blue-500"

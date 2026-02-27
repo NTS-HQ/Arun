@@ -1,5 +1,29 @@
 import sample_vdo from "../assets/samplevideo.mp4"
+import { useContent } from "../hooks/useContent";
+import { Link } from "react-router-dom";
+
 export default function ImpactSection() {
+  const { content, loading } = useContent('home');
+  const impactContent = content.impact || {};
+
+  const stats = [
+    {
+      number: impactContent.stat1_number?.value || '200k',
+      title: impactContent.stat1_title?.value || 'Meals Distributed',
+      desc: impactContent.stat1_desc?.value || 'Ensuring food security for families.',
+    },
+    {
+      number: impactContent.stat2_number?.value || '10000+',
+      title: impactContent.stat2_title?.value || 'Individuals Supported',
+      desc: impactContent.stat2_desc?.value || 'Providing education and health support.',
+    },
+    {
+      number: impactContent.stat3_number?.value || '300+',
+      title: impactContent.stat3_title?.value || 'Homes Rebuilt',
+      desc: impactContent.stat3_desc?.value || 'Helping families restore lives.',
+    },
+  ];
+
   return (
     <section className="w-full px-6 md:px-12 lg:px-20 py-20">
       
@@ -48,12 +72,12 @@ export default function ImpactSection() {
           {/* TEXT CONTENT */}
           <div className="relative z-10 p-6 text-white flex flex-col justify-between">
             <div>
-              <h3 className="text-4xl font-bold">200k</h3>
-              <p className="font-medium mt-1">Meals Distributed</p>
+              <h3 className="text-4xl font-bold">{stats[0].number}</h3>
+              <p className="font-medium mt-1">{stats[0].title}</p>
             </div>
 
             <p className="bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-full text-sm w-fit mt-4">
-              Ensuring food security for families.
+              {stats[0].desc}
             </p>
           </div>
         </a>
@@ -79,12 +103,12 @@ export default function ImpactSection() {
 
           <div className="relative z-10 p-6 text-white flex flex-col justify-between">
             <div>
-              <h3 className="text-4xl font-bold">10000+</h3>
-              <p className="font-medium">Individuals Supported</p>
+              <h3 className="text-4xl font-bold">{stats[1].number}</h3>
+              <p className="font-medium">{stats[1].title}</p>
             </div>
 
             <p className="bg-white/20 text-white backdrop-blur-md px-4 py-2 rounded-full text-sm w-fit">
-              Providing education and health support.
+              {stats[1].desc}
             </p>
           </div>
         </a>
@@ -110,12 +134,12 @@ export default function ImpactSection() {
 
           <div className="relative z-10 p-6 text-black flex flex-col justify-between">
             <div>
-              <h3 className="text-4xl font-bold text-white">300+</h3>
-              <p className="font-medium text-gray-100">Homes Rebuilt</p>
+              <h3 className="text-4xl font-bold text-white">{stats[2].number}</h3>
+              <p className="font-medium text-gray-100">{stats[2].title}</p>
             </div>
 
             <p className="bg-white/70 backdrop-blur-md text-black px-4 py-2 rounded-full text-sm w-fit">
-              Helping families restore lives.
+              {stats[2].desc}
             </p>
           </div>
         </a>
@@ -123,12 +147,12 @@ export default function ImpactSection() {
 
       {/* CTA BUTTON */}
       <div className="mt-14 flex justify-center">
-        <a
-          href="/our-works"
+        <Link
+          to="/our-works"
           className="px-8 py-3 bg-black text-white rounded-full text-sm font-medium hover:bg-gray-800 transition"
         >
           View All Works
-        </a>
+        </Link>
       </div>
     </section>
   );

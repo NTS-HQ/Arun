@@ -7,12 +7,21 @@ import { useContent } from "../hooks/useContent";
 
 
 export default function AboutUs() {
-  const { content, loading } = useContent('about');
+  const { content, loading, refreshContent } = useContent('about');
   const founderContent = content.founder || {};
   const bannerContent = content.banner || {};
 
   return (
     <section className="w-full bg-white text-gray-800">
+      {/* Refresh Button */}
+      <button 
+        onClick={refreshContent}
+        className="fixed bottom-4 right-4 z-50 bg-black text-white px-4 py-2 rounded-full shadow-lg hover:bg-gray-800 text-sm"
+        title="Click to refresh content"
+      >
+        ↻ Refresh
+      </button>
+
       {/* Hero Image */}
       <div className="w-full h-[80vh] md:h-[70vh] lg:h-[80vh] overflow-hidden">
         <img

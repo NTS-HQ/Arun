@@ -27,6 +27,7 @@ const request = async (endpoint, options = {}) => {
 
     const res = await fetch(url, {
         ...options,
+        credentials: "include",
         headers: {
             "Content-Type": "application/json",
             ...options.headers,
@@ -60,6 +61,7 @@ const upload = async (endpoint, formData) => {
     const url = `${BASE_URL}${endpoint}`;
     const res = await fetch(url, {
         method: "POST",
+        credentials: "include",
         body: formData,
     });
     return res.json();

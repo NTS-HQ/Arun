@@ -57,12 +57,8 @@ export default function HelpRequired() {
     setFieldErrors({});
 
     try {
-      // Read latest formData via functional update
-      let snapshot;
-      setFormData((current) => { snapshot = current; return current; });
-
       const fd = new FormData();
-      Object.entries(snapshot).forEach(([k, v]) => {
+      Object.entries(formData).forEach(([k, v]) => {
         fd.append(k, k === "help_types" ? v.join(", ") : v);
       });
       fd.append("terms_accepted", "true");
@@ -84,12 +80,12 @@ export default function HelpRequired() {
         }
         setToast({ type: "error", message: res.message || "Something went wrong." });
       }
-    } catch {
+    } catch (err) {
       setToast({ type: "error", message: "Server unreachable. Please try again later." });
     } finally {
       setLoading(false);
     }
-  }, [agreed, attachment]);
+  }, [agreed, attachment, formData]);
 
   const inp = (field) =>
     `w-full px-4 py-2 rounded-xl border focus:ring-2 focus:outline-none transition ${fieldErrors[field] ? "border-red-400 focus:ring-red-300" : "border-gray-300 focus:ring-yellow-500"

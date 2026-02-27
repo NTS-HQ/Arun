@@ -77,15 +77,18 @@ export default function JoinOurTeam() {
     setFieldErrors({});
 
     try {
-      let snapshot;
-      setFormData((current) => { snapshot = current; return current; });
+      console.log("Submitting form with data:", formData);
 
       const fd = new FormData();
-      Object.entries(snapshot).forEach(([k, v]) => fd.append(k, v));
+      Object.entries(formData).forEach(([k, v]) => {
+        if (v) fd.append(k, v);
+      });
       fd.append("terms_accepted", "true");
       if (photoFile) fd.append("photo", photoFile);
 
       const res = await api.upload("/forms/join", fd);
+
+      console.log("Response:", res);
 
       if (res.success) {
         // Show success toast with member ID
@@ -107,6 +110,7 @@ export default function JoinOurTeam() {
         setPhotoName("No file chosen");
         setAgreed(false);
       } else {
+        console.log("Form errors:", res.errors);
         if (res.errors) {
           const errs = {};
           res.errors.forEach((err) => { errs[err.field] = err.message; });
@@ -114,12 +118,13 @@ export default function JoinOurTeam() {
         }
         setToast({ type: "error", message: res.message || "Something went wrong." });
       }
-    } catch {
+    } catch (err) {
+      console.error("Form submission error:", err);
       setToast({ type: "error", message: "Server unreachable. Please try again later." });
     } finally {
       setLoading(false);
     }
-  }, [agreed, photoFile]);
+  }, [agreed, photoFile, formData]);
 
   return (
     <section className="w-full flex justify-center bg-gradient-to-br from-gray-100 to-gray-200 px-4 py-24">

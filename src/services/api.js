@@ -41,11 +41,13 @@ const request = async (endpoint, options = {}) => {
  * POST JSON data.
  * @param {string} endpoint
  * @param {object} body
+ * @param {string} [token] - optional auth token
  */
-const post = (endpoint, body) =>
+const post = (endpoint, body, token) =>
     request(endpoint, {
         method: "POST",
         body: JSON.stringify(body),
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
 
 /**

@@ -3,6 +3,7 @@ import { FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaPaperclip } from "react-icons
 import api from "../services/api";
 import useSocket from "../hooks/useSocket";
 import Toast from "../components/Toast";
+import { useContent } from "../hooks/useContent";
 
 const INITIAL_FORM = { name: "", email: "", phone: "", message: "" };
 
@@ -15,11 +16,13 @@ export default function ContactUs() {
   const [toast, setToast] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const { content } = useContent('contact');
+  const contactInfo = content.info || {};
+
   useSocket("new_contact", useCallback((data) => {
     setToast({ type: "info", message: `New contact received: ${data.name}` });
   }, []));
 
-  // ─── Stable handler — uses functional update to avoid stale closure ──
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -44,15 +47,14 @@ export default function ContactUs() {
 
     try {
       const fd = new FormData();
-      // Read from state snapshot at submit time — no stale closure issue
       setFormData((currentForm) => {
         Object.entries(currentForm).forEach(([k, v]) => fd.append(k, v));
-        return currentForm; // no change, just reading
+        return currentForm;
       });
       fd.append("terms_accepted", "true");
       if (attachment) fd.append("attachment", attachment);
 
-      const res = await api.upload("/contact", fd);
+      const res = await api.upload("/forms/contact", fd);
 
       if (res.success) {
         setToast({ type: "success", message: "Your message has been sent successfully!" });
@@ -169,16 +171,16 @@ export default function ContactUs() {
             </div>
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-gray-200 text-gray-700 text-xl"><FaPhoneAlt /></div>
-              <p className="text-gray-800 text-lg">+91 98765 43210</p>
+              <p className="text-gray-800 text-lg">{contactInfo.phone?.value || '+91 98765 43210'}</p>
             </div>
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-gray-200 text-gray-700 text-xl"><FaEnvelope /></div>
-              <p className="text-gray-800 text-lg">info@example.com</p>
+              <p className="text-gray-800 text-lg">{contactInfo.email?.value || 'info@example.com'}</p>
             </div>
             <div className="flex items-start gap-4">
               <div className="p-3 rounded-full bg-gray-200 text-gray-700 text-xl"><FaMapMarkerAlt /></div>
               <p className="text-gray-800 text-lg leading-relaxed">
-                123 Example Street, Near Sample Landmark, City, State, Country 123456
+                {contactInfo.address?.value || '123 Example Street, Near Sample Landmark, City, State, Country 123456'}
               </p>
             </div>
             <div className="w-full h-56 rounded-xl overflow-hidden border border-gray-300">

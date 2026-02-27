@@ -68,7 +68,7 @@ export default function HelpRequired() {
       fd.append("terms_accepted", "true");
       if (attachment) fd.append("attachment", attachment);
 
-      const res = await api.upload("/help", fd);
+      const res = await api.upload("/forms/help", fd);
 
       if (res.success) {
         setToast({ type: "success", message: "Your help request has been submitted!" });

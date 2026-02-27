@@ -85,7 +85,7 @@ export default function JoinOurTeam() {
       fd.append("terms_accepted", "true");
       if (photoFile) fd.append("photo", photoFile);
 
-      const res = await api.upload("/join", fd);
+      const res = await api.upload("/forms/join", fd);
 
       if (res.success) {
         // Show success toast with member ID

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 export default function AdminLogin() {
     const navigate = useNavigate();
     const [email, setEmail] = useState("");
@@ -14,7 +16,7 @@ export default function AdminLogin() {
         setError("");
 
         try {
-            const res = await fetch("http://localhost:5000/api/admin/login", {
+            const res = await fetch(`${API_URL}/admin/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),

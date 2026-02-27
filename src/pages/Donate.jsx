@@ -55,7 +55,7 @@ export default function Donate() {
       fd.append("terms_accepted", "true");
       if (attachment) fd.append("attachment", attachment);
 
-      const res = await api.upload("/donate", fd);
+      const res = await api.upload("/forms/donate", fd);
 
       if (res.success) {
         setToast({ type: "success", message: "Thank you for your donation!" });

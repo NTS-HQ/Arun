@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import contentApi from "../services/contentApi";
@@ -24,55 +24,6 @@ const STATUS_COLORS = {
     closed: "bg-gray-200 text-gray-700",
 };
 
-const COLUMNS = {
-    contacts: [
-        { key: "name", label: "Name" },
-        { key: "email", label: "Email" },
-        { key: "phone", label: "Phone" },
-        { key: "message", label: "Message", truncate: true },
-        { key: "attachmentUrl", label: "File", isFile: true },
-        { key: "termsAccepted", label: "Terms", isBool: true },
-    ],
-    help_requests: [
-        { key: "fullName", label: "Name" },
-        { key: "dob", label: "DOB" },
-        { key: "gender", label: "Gender" },
-        { key: "phone", label: "Phone" },
-        { key: "email", label: "Email" },
-        { key: "emergency", label: "Emergency" },
-        { key: "helpTypes", label: "Help Types", truncate: true },
-        { key: "address", label: "Address", truncate: true },
-        { key: "state", label: "State" },
-        { key: "district", label: "District" },
-        { key: "zipCode", label: "Zip Code" },
-        { key: "attachmentUrl", label: "File", isFile: true },
-        { key: "termsAccepted", label: "Terms", isBool: true },
-    ],
-    applicants: [
-        { key: "memberId", label: "Member ID" },
-        { key: "fullName", label: "Name" },
-        { key: "phone", label: "Phone" },
-        { key: "email", label: "Email" },
-        { key: "familyMembers", label: "Family Members" },
-        { key: "state", label: "State" },
-        { key: "district", label: "District" },
-        { key: "block", label: "Block" },
-        { key: "city", label: "City" },
-        { key: "pincode", label: "Pincode" },
-        { key: "referredBy", label: "Referred By" },
-        { key: "photoUrl", label: "Photo", isImage: true },
-        { key: "termsAccepted", label: "Terms", isBool: true },
-    ],
-    donations: [
-        { key: "fullName", label: "Name" },
-        { key: "mobile", label: "Mobile" },
-        { key: "email", label: "Email" },
-        { key: "amount", label: "Amount", isAmount: true },
-        { key: "attachmentUrl", label: "Receipt", isFile: true },
-        { key: "termsAccepted", label: "Terms", isBool: true },
-    ],
-};
-
 const FILE_BASE = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
 const PAGES = [
@@ -83,63 +34,14 @@ const PAGES = [
     { key: "footer", label: "Footer" },
 ];
 
-function ImageModal({ src, onClose }) {
-    if (!src) return null;
-    return (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
-                <img src={src} alt="Preview" className="w-full rounded-2xl shadow-2xl object-contain max-h-[80vh]" />
-                <button onClick={onClose} className="absolute -top-3 -right-3 bg-white text-gray-800 rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold hover:bg-red-500 hover:text-white transition">×</button>
-            </div>
-        </div>
-    );
-}
-
-function Cell({ col, value, onImageClick }) {
-    if (col.isImage && value) {
-        return (
-            <td className="px-3 py-2">
-                <img src={`${FILE_BASE}${value}`} alt="photo" className="w-10 h-10 rounded-lg object-cover cursor-pointer hover:opacity-80 transition border border-gray-200" onClick={() => onImageClick(`${FILE_BASE}${value}`)} />
-            </td>
-        );
-    }
-    if (col.isFile && value) {
-        const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(value);
-        return (
-            <td className="px-3 py-2">
-                <div className="flex items-center gap-2">
-                    {isImg && <img src={`${FILE_BASE}${value}`} alt="attach" className="w-8 h-8 rounded object-cover cursor-pointer hover:opacity-80" onClick={() => onImageClick(`${FILE_BASE}${value}`)} />}
-                    <a href={`${FILE_BASE}${value}`} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline font-medium">{isImg ? "View" : "Download"}</a>
-                </div>
-            </td>
-        );
-    }
-    if (col.isBool) {
-        return (
-            <td className="px-3 py-2">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${value ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
-                    {value ? "✓ Yes" : "✗ No"}
-                </span>
-            </td>
-        );
-    }
-    if (col.isAmount) {
-        return <td className="px-3 py-2 font-semibold text-green-700">₹{value}</td>;
-    }
-    return (
-        <td className={`px-3 py-2 text-gray-700 ${col.truncate ? "max-w-[150px] truncate" : ""}`}>
-            {value || <span className="text-gray-400 text-xs">—</span>}
-        </td>
-    );
-}
-
-// Content Management Component
+// Content Management with Image Upload
 function ContentManagement({ token, onToast }) {
     const [selectedPage, setSelectedPage] = useState("home");
     const [content, setContent] = useState({});
     const [loading, setLoading] = useState(true);
     const [editingItem, setEditingItem] = useState(null);
     const [editValue, setEditValue] = useState("");
+    const [uploading, setUploading] = useState(false);
 
     const fetchContent = useCallback(async () => {
         setLoading(true);
@@ -159,15 +61,21 @@ function ContentManagement({ token, onToast }) {
         fetchContent();
     }, [fetchContent]);
 
-    const handleEdit = (section, key, value) => {
-        setEditingItem({ section, key });
+    const handleEdit = (section, key, value, type) => {
+        setEditingItem({ section, key, type });
         setEditValue(value || "");
     };
 
     const handleSave = async () => {
         if (!editingItem) return;
         try {
-            const res = await contentApi.updateContentByKey(selectedPage, editingItem.section, editingItem.key, editValue, token);
+            const res = await contentApi.updateContentByKey(
+                selectedPage, 
+                editingItem.section, 
+                editingItem.key, 
+                editValue, 
+                token
+            );
             if (res.success) {
                 onToast({ type: "success", message: "Content updated successfully!" });
                 fetchContent();
@@ -180,6 +88,25 @@ function ContentManagement({ token, onToast }) {
         setEditingItem(null);
     };
 
+    const handleImageUpload = async (section, key, file) => {
+        if (!file) return;
+        setUploading(true);
+        try {
+            const res = await contentApi.uploadImage(file, token);
+            if (res.success) {
+                // Update content with image URL
+                await contentApi.updateContentByKey(selectedPage, section, key, res.url, token);
+                onToast({ type: "success", message: "Image uploaded successfully!" });
+                fetchContent();
+            } else {
+                onToast({ type: "error", message: "Upload failed" });
+            }
+        } catch (err) {
+            onToast({ type: "error", message: "Error uploading image" });
+        }
+        setUploading(false);
+    };
+
     const flattenContent = () => {
         const flat = [];
         Object.entries(content).forEach(([section, items]) => {
@@ -190,8 +117,10 @@ function ContentManagement({ token, onToast }) {
         return flat;
     };
 
+    const items = flattenContent();
+
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             <div className="flex gap-2 flex-wrap">
                 {PAGES.map((page) => (
                     <button key={page.key} onClick={() => setSelectedPage(page.key)}
@@ -201,35 +130,74 @@ function ContentManagement({ token, onToast }) {
                 ))}
             </div>
 
+            {/* Add New Content Button */}
+            <div className="flex gap-2">
+                <button onClick={() => {
+                    const key = prompt("Enter key name (e.g., hero_image):");
+                    if (key) {
+                        const section = prompt("Enter section (e.g., hero):");
+                        if (section) {
+                            handleEdit(section, key, "", "text");
+                        }
+                    }
+                }} className="px-4 py-2 bg-green-600 text-white rounded-full text-sm hover:bg-green-700">
+                    + Add New Field
+                </button>
+            </div>
+
             {loading ? (
                 <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black" /></div>
             ) : (
-                <div className="bg-white rounded-2xl shadow border border-gray-200 overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                            <tr>
-                                <th className="px-4 py-3">Section</th>
-                                <th className="px-4 py-3">Key</th>
-                                <th className="px-4 py-3">Value</th>
-                                <th className="px-4 py-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {flattenContent().map((item, idx) => (
-                                <tr key={idx} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3 font-medium">{item.section}</td>
-                                    <td className="px-4 py-3 text-gray-500">{item.key}</td>
-                                    <td className="px-4 py-3 max-w-xs truncate">{item.value || "—"}</td>
-                                    <td className="px-4 py-3">
-                                        <button onClick={() => handleEdit(item.section, item.key, item.value)}
-                                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs hover:bg-blue-200">
-                                            Edit
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {items.map((item, idx) => (
+                        <div key={idx} className="bg-white rounded-xl shadow border border-gray-200 p-4">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-xs font-medium text-gray-500">{item.section}</span>
+                                <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">{item.type}</span>
+                            </div>
+                            <h4 className="font-semibold text-gray-900 mb-2">{item.key}</h4>
+                            
+                            {item.type === 'image' || item.key.includes('image') || item.key.includes('img') || item.key.includes('photo') || item.key.includes('banner') || item.key.includes('hero') ? (
+                                <div className="space-y-2">
+                                    {item.value ? (
+                                        <img src={`${FILE_BASE}${item.value}`} alt={item.key} className="w-full h-32 object-cover rounded-lg" />
+                                    ) : (
+                                        <div className="w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">No image</div>
+                                    )}
+                                    <input 
+                                        type="file" 
+                                        accept="image/*"
+                                        onChange={(e) => handleImageUpload(item.section, item.key, e.target.files[0])}
+                                        className="text-xs w-full"
+                                        disabled={uploading}
+                                    />
+                                </div>
+                            ) : item.type === 'video' || item.key.includes('video') ? (
+                                <div className="space-y-2">
+                                    {item.value ? (
+                                        <video src={`${FILE_BASE}${item.value}`} className="w-full h-32 object-cover rounded-lg" controls />
+                                    ) : (
+                                        <div className="w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">No video</div>
+                                    )}
+                                    <input 
+                                        type="file" 
+                                        accept="video/*"
+                                        onChange={(e) => handleImageUpload(item.section, item.key, e.target.files[0])}
+                                        className="text-xs w-full"
+                                        disabled={uploading}
+                                    />
+                                </div>
+                            ) : (
+                                <p className="text-sm text-gray-600 truncate">{item.value || "—"}</p>
+                            )}
+                            
+                            <button onClick={() => handleEdit(item.section, item.key, item.value, item.type)}
+                                className="mt-2 w-full py-2 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200">
+                                {item.type === 'image' || item.key.includes('image') ? 'Change Image' : 
+                                 item.type === 'video' ? 'Change Video' : 'Edit'}
+                            </button>
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -238,6 +206,7 @@ function ContentManagement({ token, onToast }) {
                     <div className="bg-white rounded-2xl p-6 max-w-lg w-full">
                         <h3 className="text-lg font-semibold mb-4">Edit Content</h3>
                         <p className="text-sm text-gray-500 mb-2">{editingItem.section} - {editingItem.key}</p>
+                        <p className="text-xs text-gray-400 mb-4">Type: {editingItem.type}</p>
                         <textarea value={editValue} onChange={(e) => setEditValue(e.target.value)}
                             className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-black focus:outline-none" rows={4} />
                         <div className="flex gap-2 mt-4">
@@ -408,41 +377,23 @@ export default function AdminDashboard() {
         }
     }, [token]);
 
-    const fetchDataRef = useRef(fetchData);
-    useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
-
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    useSocket("new_contact", useCallback((e) => {
-        setToast({ type: "info", message: `New contact from ${e.name}` });
-        fetchDataRef.current();
-    }, []));
-
-    useSocket("new_help_request", useCallback((e) => {
-        setToast({ type: "info", message: `Help request from ${e.full_name}` });
-        fetchDataRef.current();
-    }, []));
-
-    useSocket("new_applicant", useCallback((e) => {
-        setToast({ type: "info", message: `Application from ${e.full_name}` });
-        fetchDataRef.current();
-    }, []));
-
-    useSocket("new_donation", useCallback((e) => {
-        setToast({ type: "info", message: `Donation ₹${e.amount} received` });
-        fetchDataRef.current();
-    }, []));
+    useSocket("new_contact", useCallback(() => { fetchData(); }, [fetchData]));
+    useSocket("new_help_request", useCallback(() => { fetchData(); }, [fetchData]));
+    useSocket("new_applicant", useCallback(() => { fetchData(); }, [fetchData]));
+    useSocket("new_donation", useCallback(() => { fetchData(); }, [fetchData]));
 
     const handleDelete = useCallback(async (type, id) => {
         if (!confirm("Delete this entry permanently?")) return;
         try {
             await api.del(`/admin/${type}/${id}`, token);
             setToast({ type: "success", message: `Deleted #${id}` });
-            fetchDataRef.current();
+            fetchData();
         } catch {
             setToast({ type: "error", message: "Delete failed." });
         }
-    }, [token]);
+    }, [token, fetchData]);
 
     const handleStatus = useCallback(async (type, id, newStatus) => {
         try {
@@ -477,19 +428,59 @@ export default function AdminDashboard() {
         return matchStatus && matchSearch;
     }) : allRows;
 
-    const cols = COLUMNS[activeTab] || [];
+    const columns = {
+        contacts: [
+            { key: "name", label: "Name" },
+            { key: "email", label: "Email" },
+            { key: "phone", label: "Phone" },
+            { key: "message", label: "Message", truncate: true },
+            { key: "attachmentUrl", label: "File", isFile: true },
+            { key: "termsAccepted", label: "Terms", isBool: true },
+        ],
+        help_requests: [
+            { key: "fullName", label: "Name" },
+            { key: "phone", label: "Phone" },
+            { key: "email", label: "Email" },
+            { key: "emergency", label: "Emergency" },
+            { key: "helpTypes", label: "Help Types" },
+            { key: "state", label: "State" },
+            { key: "district", label: "District" },
+        ],
+        applicants: [
+            { key: "memberId", label: "Member ID" },
+            { key: "fullName", label: "Name" },
+            { key: "phone", label: "Phone" },
+            { key: "email", label: "Email" },
+            { key: "state", label: "State" },
+            { key: "district", label: "District" },
+            { key: "photoUrl", label: "Photo", isImage: true },
+        ],
+        donations: [
+            { key: "fullName", label: "Name" },
+            { key: "mobile", label: "Mobile" },
+            { key: "email", label: "Email" },
+            { key: "amount", label: "Amount", isAmount: true },
+        ],
+    };
+
+    const cols = columns[activeTab] || [];
 
     return (
         <section className="w-full min-h-screen bg-gray-100 pt-20 px-4 pb-12">
             <Toast data={toast} onClose={() => setToast(null)} />
-            <ImageModal src={previewImg} onClose={() => setPreviewImg(null)} />
+            {previewImg && (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setPreviewImg(null)}>
+                    <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
+                        <img src={previewImg} alt="Preview" className="w-full rounded-2xl shadow-2xl object-contain max-h-[80vh]" />
+                        <button onClick={() => setPreviewImg(null)} className="absolute -top-3 -right-3 bg-white text-gray-800 rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold hover:bg-red-500 hover:text-white">×</button>
+                    </div>
+                </div>
+            )}
 
             <div className="max-w-full mx-auto">
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-                    <button onClick={logout} className="px-4 py-2 text-sm rounded-full bg-red-500 text-white hover:bg-red-600 transition font-medium">
-                        Logout
-                    </button>
+                    <button onClick={logout} className="px-4 py-2 text-sm rounded-full bg-red-500 text-white hover:bg-red-600">Logout</button>
                 </div>
 
                 <div className="flex gap-2 mb-4 flex-wrap">
@@ -520,15 +511,12 @@ export default function AdminDashboard() {
                                 <option value="all">All Statuses</option>
                                 {STATUSES.map((s) => (<option key={s} value={s}>{s.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}</option>))}
                             </select>
-                            <button onClick={fetchData} className="px-4 py-2 rounded-xl bg-black text-white text-sm hover:bg-gray-800 transition font-medium">↻ Refresh</button>
+                            <button onClick={fetchData} className="px-4 py-2 rounded-xl bg-black text-white text-sm hover:bg-gray-800">↻ Refresh</button>
                         </div>
 
                         <div className="flex gap-3 mb-4 text-sm flex-wrap">
                             <span className="bg-blue-50 text-blue-800 px-3 py-1 rounded-full font-medium">Total: {allRows.length}</span>
                             <span className="bg-gray-50 text-gray-700 px-3 py-1 rounded-full font-medium">Showing: {filtered.length}</span>
-                            {(search || statusFilter !== "all") && (
-                                <button onClick={() => { setSearch(""); setStatusFilter("all"); }} className="text-xs text-gray-500 hover:text-red-500 underline">Clear filters</button>
-                            )}
                         </div>
 
                         {loading ? (
@@ -549,23 +537,35 @@ export default function AdminDashboard() {
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {filtered.map((row) => (
-                                            <tr key={row.id} className="hover:bg-gray-50 transition">
+                                            <tr key={row.id} className="hover:bg-gray-50">
                                                 <td className="px-3 py-2 font-mono text-xs text-gray-400">#{row.id}</td>
-                                                {cols.map((col) => (<Cell key={col.key} col={col} value={row[col.key]} onImageClick={setPreviewImg} />))}
+                                                {cols.map((col) => {
+                                                    const value = row[col.key];
+                                                    if (col.isImage && value) {
+                                                        return <td key={col.key} className="px-3 py-2"><img src={`${FILE_BASE}${value}`} alt="" className="w-10 h-10 rounded-lg object-cover cursor-pointer" onClick={() => setPreviewImg(`${FILE_BASE}${value}`)} /></td>;
+                                                    }
+                                                    if (col.isFile && value) {
+                                                        const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(value);
+                                                        return <td key={col.key} className="px-3 py-2"><a href={`${FILE_BASE}${value}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{isImg ? "View" : "Download"}</a></td>;
+                                                    }
+                                                    if (col.isBool) {
+                                                        return <td key={col.key} className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${value ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>{value ? "✓ Yes" : "✗ No"}</span></td>;
+                                                    }
+                                                    if (col.isAmount) {
+                                                        return <td key={col.key} className="px-3 py-2 font-semibold text-green-700">₹{value}</td>;
+                                                    }
+                                                    return <td key={col.key} className={`px-3 py-2 text-gray-700 ${col.truncate ? "max-w-[150px] truncate" : ""}`}>{value || <span className="text-gray-400">—</span>}</td>;
+                                                })}
+                                                <td className="px-3 py-2"><span className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[row.status] || "bg-gray-100 text-gray-600"}`}>{row.status}</span></td>
+                                                <td className="px-3 py-2 text-xs text-gray-400">{new Date(row.createdAt).toLocaleDateString("en-IN")}</td>
                                                 <td className="px-3 py-2">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[row.status] || "bg-gray-100 text-gray-600"}`}>{row.status}</span>
-                                                </td>
-                                                <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
-                                                    {new Date(row.created_at || row.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                                                </td>
-                                                <td className="px-3 py-2">
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <button onClick={() => handleStatus(activeTab, row.id, "resolved")} title="Approve" className="px-2.5 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 text-xs font-semibold transition">✓</button>
-                                                        <button onClick={() => handleStatus(activeTab, row.id, "closed")} title="Reject" className="px-2.5 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold transition">✗</button>
-                                                        <select value={row.status} onChange={(e) => handleStatus(activeTab, row.id, e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
-                                                            {STATUSES.map((s) => (<option key={s} value={s}>{s.replace("_", " ")}</option>))}
+                                                    <div className="flex items-center gap-1">
+                                                        <button onClick={() => handleStatus(activeTab, row.id, "resolved")} className="px-2 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 text-xs">✓</button>
+                                                        <button onClick={() => handleStatus(activeTab, row.id, "closed")} className="px-2 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-xs">✗</button>
+                                                        <select value={row.status} onChange={(e) => handleStatus(activeTab, row.id, e.target.value)} className="text-xs border rounded px-1">
+                                                            {STATUSES.map((s) => (<option key={s} value={s}>{s}</option>))}
                                                         </select>
-                                                        <button onClick={() => handleDelete(activeTab, row.id)} title="Delete" className="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600 text-xs font-semibold transition">🗑</button>
+                                                        <button onClick={() => handleDelete(activeTab, row.id)} className="px-2 py-1 rounded-lg bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600 text-xs">🗑</button>
                                                     </div>
                                                 </td>
                                             </tr>

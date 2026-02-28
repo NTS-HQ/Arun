@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
-import contentApi from "../services/contentApi";
 import useSocket from "../hooks/useSocket";
 import Toast from "../components/Toast";
 
@@ -10,7 +9,6 @@ const TABS = [
     { key: "help_requests", label: "Help Requests" },
     { key: "applicants", label: "Applicants" },
     { key: "donations", label: "Donations" },
-    { key: "content", label: "Content Management" },
     { key: "admins", label: "Admin Management" },
 ];
 
@@ -25,200 +23,6 @@ const STATUS_COLORS = {
 };
 
 const FILE_BASE = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
-
-const PAGES = [
-    { key: "home", label: "Home Page" },
-    { key: "about", label: "About Page" },
-    { key: "contact", label: "Contact Page" },
-    { key: "faq", label: "FAQ Page" },
-    { key: "footer", label: "Footer" },
-];
-
-// Content Management with Image Upload
-function ContentManagement({ token, onToast }) {
-    const [selectedPage, setSelectedPage] = useState("home");
-    const [content, setContent] = useState({});
-    const [loading, setLoading] = useState(true);
-    const [editingItem, setEditingItem] = useState(null);
-    const [editValue, setEditValue] = useState("");
-    const [uploading, setUploading] = useState(false);
-
-    const fetchContent = useCallback(async () => {
-        setLoading(true);
-        try {
-            const res = await contentApi.getPageContent(selectedPage, token);
-            if (res.success) {
-                setContent(res.data || {});
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    }, [selectedPage, token]);
-
-    useEffect(() => {
-        fetchContent();
-    }, [fetchContent]);
-
-    const handleEdit = (section, key, value, type) => {
-        setEditingItem({ section, key, type });
-        setEditValue(value || "");
-    };
-
-    const handleSave = async () => {
-        if (!editingItem) return;
-        try {
-            const res = await contentApi.updateContentByKey(
-                selectedPage, 
-                editingItem.section, 
-                editingItem.key, 
-                editValue, 
-                token
-            );
-            if (res.success) {
-                onToast({ type: "success", message: "Content updated successfully!" });
-                fetchContent();
-            } else {
-                onToast({ type: "error", message: res.message || "Failed to update" });
-            }
-        } catch (err) {
-            onToast({ type: "error", message: "Error updating content" });
-        }
-        setEditingItem(null);
-    };
-
-    const handleImageUpload = async (section, key, file) => {
-        if (!file) return;
-        setUploading(true);
-        try {
-            const res = await contentApi.uploadImage(file, token);
-            if (res.success) {
-                // Update content with image URL
-                await contentApi.updateContentByKey(selectedPage, section, key, res.url, token);
-                onToast({ type: "success", message: "Image uploaded successfully!" });
-                fetchContent();
-            } else {
-                onToast({ type: "error", message: "Upload failed" });
-            }
-        } catch (err) {
-            onToast({ type: "error", message: "Error uploading image" });
-        }
-        setUploading(false);
-    };
-
-    const flattenContent = () => {
-        const flat = [];
-        Object.entries(content).forEach(([section, items]) => {
-            Object.entries(items).forEach(([key, data]) => {
-                flat.push({ section, key, ...data });
-            });
-        });
-        return flat;
-    };
-
-    const items = flattenContent();
-
-    return (
-        <div className="space-y-6">
-            <div className="flex gap-2 flex-wrap">
-                {PAGES.map((page) => (
-                    <button key={page.key} onClick={() => setSelectedPage(page.key)}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition ${selectedPage === page.key ? "bg-black text-white" : "bg-white border border-gray-300"}`}>
-                        {page.label}
-                    </button>
-                ))}
-            </div>
-
-            {/* Add New Content Button */}
-            <div className="flex gap-2">
-                <button onClick={() => {
-                    const key = prompt("Enter key name (e.g., hero_image):");
-                    if (key) {
-                        const section = prompt("Enter section (e.g., hero):");
-                        if (section) {
-                            handleEdit(section, key, "", "text");
-                        }
-                    }
-                }} className="px-4 py-2 bg-green-600 text-white rounded-full text-sm hover:bg-green-700">
-                    + Add New Field
-                </button>
-            </div>
-
-            {loading ? (
-                <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black" /></div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {items.map((item, idx) => (
-                        <div key={idx} className="bg-white rounded-xl shadow border border-gray-200 p-4">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-xs font-medium text-gray-500">{item.section}</span>
-                                <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">{item.type}</span>
-                            </div>
-                            <h4 className="font-semibold text-gray-900 mb-2">{item.key}</h4>
-                            
-                            {item.type === 'image' || item.key.includes('image') || item.key.includes('img') || item.key.includes('photo') || item.key.includes('banner') || item.key.includes('hero') ? (
-                                <div className="space-y-2">
-                                    {item.value ? (
-                                        <img src={`${FILE_BASE}${item.value}`} alt={item.key} className="w-full h-32 object-cover rounded-lg" />
-                                    ) : (
-                                        <div className="w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">No image</div>
-                                    )}
-                                    <input 
-                                        type="file" 
-                                        accept="image/*"
-                                        onChange={(e) => handleImageUpload(item.section, item.key, e.target.files[0])}
-                                        className="text-xs w-full"
-                                        disabled={uploading}
-                                    />
-                                </div>
-                            ) : item.type === 'video' || item.key.includes('video') ? (
-                                <div className="space-y-2">
-                                    {item.value ? (
-                                        <video src={`${FILE_BASE}${item.value}`} className="w-full h-32 object-cover rounded-lg" controls />
-                                    ) : (
-                                        <div className="w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">No video</div>
-                                    )}
-                                    <input 
-                                        type="file" 
-                                        accept="video/*"
-                                        onChange={(e) => handleImageUpload(item.section, item.key, e.target.files[0])}
-                                        className="text-xs w-full"
-                                        disabled={uploading}
-                                    />
-                                </div>
-                            ) : (
-                                <p className="text-sm text-gray-600 truncate">{item.value || "—"}</p>
-                            )}
-                            
-                            <button onClick={() => handleEdit(item.section, item.key, item.value, item.type)}
-                                className="mt-2 w-full py-2 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200">
-                                {item.type === 'image' || item.key.includes('image') ? 'Change Image' : 
-                                 item.type === 'video' ? 'Change Video' : 'Edit'}
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {editingItem && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl p-6 max-w-lg w-full">
-                        <h3 className="text-lg font-semibold mb-4">Edit Content</h3>
-                        <p className="text-sm text-gray-500 mb-2">{editingItem.section} - {editingItem.key}</p>
-                        <p className="text-xs text-gray-400 mb-4">Type: {editingItem.type}</p>
-                        <textarea value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                            className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-black focus:outline-none" rows={4} />
-                        <div className="flex gap-2 mt-4">
-                            <button onClick={handleSave} className="flex-1 py-2 bg-black text-white rounded-xl hover:bg-gray-800">Save</button>
-                            <button onClick={() => setEditingItem(null)} className="px-4 py-2 border rounded-xl hover:bg-gray-50">Cancel</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
 
 // Admin Management Component
 function AdminManagement({ token, onToast }) {
@@ -419,7 +223,7 @@ export default function AdminDashboard() {
     }, []);
 
     const allRows = data[activeTab] || [];
-    const filtered = activeTab !== "content" && activeTab !== "admins" ? allRows.filter((row) => {
+    const filtered = activeTab !== "admins" ? allRows.filter((row) => {
         const matchStatus = statusFilter === "all" || row.status === statusFilter;
         const name = (row.name || row.fullName || row.full_name || "").toLowerCase();
         const email = (row.email || "").toLowerCase();
@@ -488,7 +292,7 @@ export default function AdminDashboard() {
                         <button key={tab.key} onClick={() => handleTabChange(tab.key)}
                             className={`px-5 py-2 rounded-full text-sm font-medium transition ${activeTab === tab.key ? "bg-black text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"}`}>
                             {tab.label}
-                            {tab.key !== "content" && tab.key !== "admins" && (
+                            {tab.key !== "admins" && (
                                 <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? "bg-white/20" : "bg-gray-200"}`}>
                                     {(data[tab.key] || []).length}
                                 </span>
@@ -497,9 +301,7 @@ export default function AdminDashboard() {
                     ))}
                 </div>
 
-                {activeTab === "content" ? (
-                    <ContentManagement token={token} onToast={setToast} />
-                ) : activeTab === "admins" ? (
+                {activeTab === "admins" ? (
                     <AdminManagement token={token} onToast={setToast} />
                 ) : (
                     <>
